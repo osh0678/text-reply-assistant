@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>문자 답장 어시스턴트</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div id="app">
+
+    <!-- ── 사이드바 ──────────────────────────────── -->
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <div class="logo">
+          <span class="logo-icon">💬</span>
+          <span class="logo-text">Reply AI</span>
+        </div>
+        <button id="settings-btn" class="icon-btn" title="설정">⚙️</button>
+      </div>
+
+      <button id="add-room-btn" class="btn btn-primary btn-full">
+        + 채팅방 추가
+      </button>
+
+      <div id="room-list">
+        <!-- JS로 렌더링 -->
+      </div>
+
+      <div id="sidebar-footer">
+        <span id="api-status" class="status-dot status-unknown" title="API 연결 상태">●</span>
+        <span id="api-status-text">API 미설정</span>
+      </div>
+    </aside>
+
+    <!-- ── 메인 콘텐츠 ──────────────────────────── -->
+    <main id="content">
+
+      <!-- 빈 상태 -->
+      <div id="empty-state">
+        <div class="empty-icon">💬</div>
+        <h2>채팅방을 선택하세요</h2>
+        <p>왼쪽에서 채팅방을 선택하거나<br />새 채팅방을 추가해주세요.</p>
+        <button class="btn btn-primary" onclick="document.getElementById('add-room-btn').click()">
+          + 첫 채팅방 추가
+        </button>
+      </div>
+
+      <!-- 채팅방 뷰 -->
+      <div id="room-view" class="hidden">
+
+        <!-- 상단 헤더 -->
+        <div id="room-header">
+          <div id="room-header-left">
+            <h2 id="room-name-display">채팅방</h2>
+            <span id="room-lang-badge" class="lang-badge"></span>
+          </div>
+          <div id="room-header-actions">
+            <button id="profile-btn" class="btn btn-secondary">
+              👤 프로필 설정
+            </button>
+            <button id="delete-room-btn" class="btn btn-danger-ghost" title="채팅방 삭제">🗑️</button>
+          </div>
+        </div>
+
+        <!-- 프로필 요약 바 -->
+        <div id="profile-summary-bar" class="hidden">
+          <!-- JS로 렌더링 -->
+        </div>
+
+        <!-- 모드 탭 -->
+        <div id="mode-tabs">
+          <button class="mode-tab active" data-mode="reply">
+            💬 답장 추천
+          </button>
+          <button class="mode-tab" data-mode="translate-reply">
+            💬🌐 답장+번역
+          </button>
+          <button class="mode-tab" data-mode="translate">
+            🌐 단순 번역
+          </button>
+        </div>
+
+        <!-- 채팅 로그 섹션 -->
+        <div class="input-section">
+          <div class="section-label">
+            <label for="chat-log">대화 로그</label>
+            <span class="hint">카카오톡에서 대화를 복사해 붙여넣기 하세요 (최근 200줄 권장)</span>
+          </div>
+          <textarea id="chat-log"
+            placeholder="[2025년 1월 1일 오후 2:30] 상대방 : 오늘 저녁 어때?&#10;[2025년 1월 1일 오후 2:31] 나 : 좋아! 어디서 볼까?&#10;..."
+            rows="8"></textarea>
+        </div>
+
+        <!-- 번역 전용 옵션 (번역 모드일 때만 표시) -->
+        <div id="translate-options" class="input-section hidden">
+          <div class="translate-row">
+            <div class="form-group">
+              <label>번역 방향</label>
+              <div class="lang-select-row">
+                <select id="from-lang">
+                  <option value="Korean">한국어 (KO)</option>
+                  <option value="English">영어 (EN)</option>
+                  <option value="Japanese">일본어 (JP)</option>
+                  <option value="Chinese">중국어 (CN)</option>
+                </select>
+                <span class="arrow">→</span>
+                <select id="to-lang">
+                  <option value="English">영어 (EN)</option>
+                  <option value="Korean">한국어 (KO)</option>
+                  <option value="Japanese">일본어 (JP)</option>
+                  <option value="Chinese">중국어 (CN)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>번역 스타일</label>
+              <select id="translate-style">
+                <option value="">기본</option>
+                <option value="캐주얼/반말">캐주얼 / 반말</option>
+                <option value="격식/존댓말">격식 / 존댓말</option>
+                <option value="친근함">친근함</option>
+                <option value="간결하게">간결하게</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 목표 입력 (답장 모드) -->
+        <div id="goal-section" class="input-section">
+          <div class="section-label">
+            <label for="user-goal">이번 답장 목표 <span class="optional">(선택)</span></label>
+          </div>
+          <input type="text" id="user-goal" placeholder="예: 약속 잡기, 오해 풀기, 감사 표현, 부드럽게 거절..." />
+        </div>
+
+        <!-- 생성 버튼 -->
+        <div class="action-row">
+          <button id="generate-btn" class="btn btn-generate">
+            <span id="generate-btn-text">✨ 생성하기</span>
+            <span id="generate-spinner" class="spinner hidden"></span>
+          </button>
+          <button id="clear-results-btn" class="btn btn-ghost">초기화</button>
+        </div>
+
+        <!-- 결과 영역 -->
+        <div id="results-section" class="hidden">
+          <div id="results-header">
+            <h3 id="results-title">추천 답장</h3>
+            <span id="results-count"></span>
+          </div>
+          <div id="results-list">
+            <!-- JS로 렌더링 -->
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- ── 채팅방 추가 모달 ──────────────────────── -->
+  <div id="add-room-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>새 채팅방 추가</h3>
+        <button class="modal-close" data-close="add-room-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="new-room-name">채팅방 이름 *</label>
+          <input type="text" id="new-room-name" placeholder="예: 영어 친구 Alex, 일 동료 Tom..." />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-close="add-room-modal">취소</button>
+        <button class="btn btn-primary" id="confirm-add-room">추가하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 프로필 모달 ──────────────────────────── -->
+  <div id="profile-modal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>👤 상대방 프로필 설정</h3>
+        <button class="modal-close" data-close="profile-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <!-- 성별 -->
+          <div class="form-group">
+            <label>성별 *</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="gender" value="남성" /> 남성
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="gender" value="여성" /> 여성
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="gender" value="미지정" checked /> 미지정
+              </label>
+            </div>
+          </div>
+
+          <!-- 관계 유형 -->
+          <div class="form-group">
+            <label>관계 유형</label>
+            <select id="profile-relationship">
+              <option value="">선택 안 함</option>
+              <option value="연인">연인</option>
+              <option value="썸">썸</option>
+              <option value="친구">친구</option>
+              <option value="업무">업무/동료</option>
+              <option value="가족">가족</option>
+              <option value="지인">지인</option>
+            </select>
+          </div>
+
+          <!-- MBTI -->
+          <div class="form-group">
+            <label>MBTI <span class="optional">(선택)</span></label>
+            <input type="text" id="profile-mbti" placeholder="예: ENFP, INTJ..." maxlength="4" />
+          </div>
+
+          <!-- 선호 톤 -->
+          <div class="form-group">
+            <label>선호 커뮤니케이션 톤</label>
+            <select id="profile-tone">
+              <option value="">선택 안 함</option>
+              <option value="다정">다정하게</option>
+              <option value="쿨">쿨하게</option>
+              <option value="장난스럽게">장난스럽게</option>
+              <option value="격식체">격식체</option>
+              <option value="짧게">짧게</option>
+            </select>
+          </div>
+
+          <!-- 성격 키워드 -->
+          <div class="form-group form-full">
+            <label>성격 키워드 <span class="optional">(선택 / 쉼표로 구분)</span></label>
+            <input type="text" id="profile-personality" placeholder="예: 감정형, 예민, 직설적, 애착형, 회피형..." />
+          </div>
+
+          <!-- 언어 설정 -->
+          <div class="form-group">
+            <label>내 언어 *</label>
+            <select id="profile-my-lang">
+              <option value="Korean">한국어 (KO)</option>
+              <option value="English">영어 (EN)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>상대방 언어 *</label>
+            <select id="profile-their-lang">
+              <option value="Korean">한국어 (KO)</option>
+              <option value="English">영어 (EN)</option>
+              <option value="Japanese">일본어 (JP)</option>
+              <option value="Chinese">중국어 (CN)</option>
+            </select>
+          </div>
+
+          <!-- 금기 표현 -->
+          <div class="form-group form-full">
+            <label>⚠️ 금기 표현 / 주제 <span class="optional">(선택 / 쉼표로 구분)</span></label>
+            <input type="text" id="profile-forbidden" placeholder="예: 헤어지자, 전 남친/여친, 결혼, 가족 관련..." />
+            <span class="hint">AI가 이 표현들을 답장에 절대 사용하지 않습니다.</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" data-close="profile-modal">취소</button>
+        <button class="btn btn-primary" id="save-profile-btn">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 설정 모달 ──────────────────────────────── -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>⚙️ 설정</h3>
+        <button class="modal-close" data-close="settings-modal">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- 프로바이더 선택 드롭다운 -->
+        <div class="form-group">
+          <label>AI 프로바이더 선택</label>
+          <select id="provider-select">
+            <option value="claude">🟣 Claude API (유료)</option>
+            <option value="openai">🟢 OpenAI / GPT (유료)</option>
+            <option value="gemini">🔵 Google Gemini (무료)</option>
+            <option value="ollama">🟡 Ollama — 로컬 실행 (완전 무료)</option>
+          </select>
+          <span class="hint">무료 옵션: Gemini는 API 키 무료 발급 · Ollama는 인터넷 없이 로컬에서 실행</span>
+        </div>
+
+        <!-- ── Claude 섹션 ── -->
+        <div id="provider-claude" class="provider-section">
+          <div class="form-group">
+            <label>Claude API 키</label>
+            <div class="input-with-toggle">
+              <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." />
+              <button class="toggle-visibility" id="toggle-api-key">👁</button>
+            </div>
+            <span class="hint">
+              <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>
+              에서 발급 · 로컬에만 저장됩니다
+            </span>
+          </div>
+          <div class="form-group">
+            <label>모델</label>
+            <select id="claude-model">
+              <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (추천)</option>
+              <option value="claude-opus-4-5-20251101">Claude Opus 4.5 (고품질)</option>
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (빠름)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ── OpenAI 섹션 ── -->
+        <div id="provider-openai" class="provider-section hidden">
+          <div class="form-group">
+            <label>OpenAI API 키</label>
+            <div class="input-with-toggle">
+              <input type="password" id="openai-key-input" placeholder="sk-proj-..." />
+              <button class="toggle-visibility" id="toggle-openai-key">👁</button>
+            </div>
+            <span class="hint">
+              <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a>
+              에서 발급 · 로컬에만 저장됩니다
+            </span>
+          </div>
+          <div class="form-group">
+            <label>모델</label>
+            <select id="openai-model">
+              <option value="gpt-4o">GPT-4o (추천)</option>
+              <option value="gpt-4o-mini">GPT-4o mini (빠름 · 저렴)</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo</option>
+              <option value="gpt-3.5-turbo">GPT-3.5 Turbo (저렴)</option>
+              <option value="o1">o1 (고품질 추론)</option>
+              <option value="o1-mini">o1-mini</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ── Gemini 섹션 (무료) ── -->
+        <div id="provider-gemini" class="provider-section hidden">
+          <div class="free-badge">🎁 무료 — Google AI Studio에서 API 키 발급</div>
+          <div class="form-group">
+            <label>Gemini API 키</label>
+            <div class="input-with-toggle">
+              <input type="password" id="gemini-key-input" placeholder="AIzaSy..." />
+              <button class="toggle-visibility" id="toggle-gemini-key">👁</button>
+            </div>
+            <span class="hint">
+              <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>
+              에서 무료 발급 (Google 계정 필요)
+            </span>
+          </div>
+          <div class="form-group">
+            <label>모델</label>
+            <select id="gemini-model">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (추천)</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (빠름 · 저렴)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (고품질)</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (Preview)</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash (Preview)</option>
+              <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- ── Ollama 섹션 (완전 무료 / 로컬) ── -->
+        <div id="provider-ollama" class="provider-section hidden">
+          <div class="free-badge">🖥️ 완전 무료 · 로컬 실행 — 인터넷 연결 불필요</div>
+          <div class="ollama-guide">
+            <strong>사전 설치 필요</strong><br />
+            1. <a href="https://ollama.com/download" target="_blank">ollama.com</a> 에서 Ollama 설치<br />
+            2. 터미널에서 모델 다운로드: <code>ollama pull llama3.2</code><br />
+            3. Ollama 실행 후 아래 설정 저장
+          </div>
+          <div class="form-group">
+            <label>서버 주소</label>
+            <div class="ollama-endpoint-row">
+              <input type="text" id="ollama-endpoint" placeholder="http://localhost:11434" />
+              <button type="button" id="fetch-ollama-models-btn" class="btn btn-secondary">
+                🔄 모델 불러오기
+              </button>
+            </div>
+            <span class="hint">기본값: http://localhost:11434</span>
+          </div>
+          <div class="form-group">
+            <label>설치된 모델 선택</label>
+            <div id="ollama-model-status" class="ollama-model-status">
+              모델 불러오기 버튼을 눌러주세요
+            </div>
+            <select id="ollama-model-select" class="hidden"></select>
+            <input type="text" id="ollama-model-input" placeholder="llama3.2" class="hidden" />
+            <span class="hint" id="ollama-model-hint">직접 입력도 가능합니다 · 추천: llama3.2, gemma3, mistral, qwen2.5</span>
+          </div>
+        </div>
+
+        <div id="api-test-result" class="test-result hidden"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="test-api-btn">연결 테스트</button>
+        <button class="btn btn-ghost" data-close="settings-modal">취소</button>
+        <button class="btn btn-primary" id="save-settings-btn">저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 토스트 알림 ──────────────────────────── -->
+  <div id="toast-container"></div>
+
+  <script src="renderer.js"></script>
+</body>
+
+</html>
