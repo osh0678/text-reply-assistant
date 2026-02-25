@@ -128,8 +128,14 @@ ipcMain.handle('generate-replies', async (_, params) => {
   const systemPrompt = buildSystemPrompt(mode, profile)
   const userMessage  = buildUserMessage(chatLog, profile, userGoal, mode)
 
-  const raw = await callAI(settings, systemPrompt, userMessage, 2500)
-  return JSON.parse(parseJsonBlock(raw))
+  return callAIWithJsonRetry({
+    settings,
+    systemPrompt,
+    userMessage,
+    maxTokens: 2500,
+    validator: isValidRepliesPayload,
+    schemaHint: '{"replies":[{"label":"...","text":"...","reason":"...","risk":null}]}'
+  })
 })
 
 // ─── IPC: 번역 ──────────────────────────────────────────────────────────────
@@ -149,8 +155,14 @@ ${text}
 순수 JSON만 반환 (마크다운 없이):
 {"translation": "번역 결과", "backTranslation": "역번역 결과 (한국어로)", "notes": "번역 참고사항 또는 null"}`
 
-  const raw = await callAI(settings, system, prompt, 1000)
-  return JSON.parse(parseJsonBlock(raw))
+  return callAIWithJsonRetry({
+    settings,
+    systemPrompt: system,
+    userMessage: prompt,
+    maxTokens: 1000,
+    validator: isValidTranslatePayload,
+    schemaHint: '{"translation":"...","backTranslation":"...","notes":null}'
+  })
 })
 
 // ─── AI 호출 헬퍼 ─────────────────────────────────────────────────────────────
@@ -268,8 +280,106 @@ async function callAI(settings, systemPrompt, userMessage, maxTokens) {
 }
 
 function parseJsonBlock(raw) {
-  const match = raw.match(/```json\s*([\s\S]*?)```/) || raw.match(/```\s*([\s\S]*?)```/)
-  return match ? match[1].trim() : raw
+  if (typeof raw !== 'string') return ''
+  const cleaned = raw.replace(/^\uFEFF/, '').trim()
+  const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fencedMatch) return fencedMatch[1].trim()
+  return cleaned
+}
+
+function extractCandidateJson(raw) {
+  const fromBlock = parseJsonBlock(raw)
+  if (fromBlock) return fromBlock
+
+  const src = (raw || '').trim()
+  const firstObj = src.indexOf('{')
+  const firstArr = src.indexOf('[')
+  const starts = [firstObj, firstArr].filter(i => i >= 0)
+  if (starts.length === 0) return src
+  const start = Math.min(...starts)
+  const endObj = src.lastIndexOf('}')
+  const endArr = src.lastIndexOf(']')
+  const end = Math.max(endObj, endArr)
+  if (end <= start) return src
+  return src.slice(start, end + 1).trim()
+}
+
+function safeJsonParse(raw) {
+  const candidate = extractCandidateJson(raw)
+  try {
+    return { ok: true, value: JSON.parse(candidate), candidate }
+  } catch (error) {
+    return { ok: false, error, candidate }
+  }
+}
+
+function isValidRepliesPayload(value) {
+  if (!value || typeof value !== 'object' || !Array.isArray(value.replies)) return false
+  if (value.replies.length < 1) return false
+
+  return value.replies.every((item) => {
+    if (!item || typeof item !== 'object') return false
+    if (typeof item.label !== 'string' || !item.label.trim()) return false
+    if (typeof item.text !== 'string' || !item.text.trim()) return false
+    if (!(item.reason == null || typeof item.reason === 'string')) return false
+    if (!(item.risk == null || typeof item.risk === 'string')) return false
+    return true
+  })
+}
+
+function isValidTranslatePayload(value) {
+  if (!value || typeof value !== 'object') return false
+  if (typeof value.translation !== 'string' || !value.translation.trim()) return false
+  if (typeof value.backTranslation !== 'string' || !value.backTranslation.trim()) return false
+  if (!(value.notes == null || typeof value.notes === 'string')) return false
+  return true
+}
+
+function buildJsonRetryMessage(userMessage, raw, parseError, schemaHint) {
+  const trimmedRaw = (raw || '').slice(0, 1200)
+  const errMsg = parseError?.message || 'JSON parse error'
+
+  return `${userMessage}
+
+[중요 재지시]
+- 직전 응답이 JSON 파싱에 실패했습니다.
+- 반드시 마크다운 코드블록 없이 순수 JSON만 반환하세요.
+- 설명 문장/머리말/꼬리말을 절대 넣지 마세요.
+- JSON 스키마 예시: ${schemaHint}
+
+[직전 파싱 오류]
+${errMsg}
+
+[직전 원본 일부]
+${trimmedRaw}`
+}
+
+async function callAIWithJsonRetry({ settings, systemPrompt, userMessage, maxTokens, validator, schemaHint }) {
+  const maxAttempts = 3
+  let nextUserMessage = userMessage
+  let lastError = null
+  let lastRaw = ''
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const raw = await callAI(settings, systemPrompt, nextUserMessage, maxTokens)
+    lastRaw = raw
+
+    const parsed = safeJsonParse(raw)
+    if (parsed.ok && validator(parsed.value)) {
+      return parsed.value
+    }
+
+    lastError = parsed.ok
+      ? new Error('JSON 형식은 맞지만 필수 필드 검증에 실패했습니다.')
+      : parsed.error
+
+    if (attempt < maxAttempts) {
+      nextUserMessage = buildJsonRetryMessage(userMessage, raw, lastError, schemaHint)
+    }
+  }
+
+  const sample = (lastRaw || '').slice(0, 300).replace(/\s+/g, ' ')
+  throw new Error(`AI 응답 JSON 파싱/검증 실패: ${lastError?.message || 'unknown error'} | 원본 샘플: ${sample}`)
 }
 
 // ─── 헬퍼 함수들 ─────────────────────────────────────────────────────────────
