@@ -1,6 +1,6 @@
-# 💬 카카오톡 답장 어시스턴트 (Personal KakaoTalk Reply Assistant)
+# 💬 문자 답장 어시스턴트 (Personal KakaoTalk Reply Assistant)
 
-Claude AI 기반의 개인용 카카오톡 답장 생성 · 번역 데스크탑 앱 (Electron)
+AI 기반의 개인용 카카오톡 답장 생성 · 번역 데스크탑 앱 (Electron)
 
 ---
 
@@ -9,6 +9,8 @@ Claude AI 기반의 개인용 카카오톡 답장 생성 · 번역 데스크탑 
 ### 1. 사전 요구사항
 - [Node.js](https://nodejs.org/) v18 이상 (LTS 권장)
 - [Claude API 키](https://console.anthropic.com/) (Anthropic Console에서 발급)
+- Gemini API
+- ollama 내장 설치 이후
 
 ### 2. 설치 및 실행
 
@@ -17,10 +19,10 @@ Claude AI 기반의 개인용 카카오톡 답장 생성 · 번역 데스크탑 
 cd kakao-reply-assistant
 
 # 패키지 설치
-npm install
+pnpm install
 
 # 앱 실행
-npm start
+pnpm start
 ```
 
 ### 3. API 키 설정
