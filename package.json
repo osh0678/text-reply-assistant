@@ -9,7 +9,8 @@
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win nsis",
-    "dist:mac": "electron-builder --mac dmg"
+    "dist:mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac zip --publish never",
+    "dist:mac:dmg": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --publish never"
   },
   "keywords": ["kakao", "reply", "assistant", "claude", "ai"],
   "author": "seong",
@@ -56,12 +57,14 @@
     },
     "mac": {
       "target": [
-        "dmg"
+        "zip"
       ],
+      "identity": null,
       "category": "public.app-category.productivity",
       "artifactName": "${productName}-${version}-${arch}.${ext}"
     },
     "dmg": {
+      "format": "UDZO",
       "title": "${productName} ${version}"
     }
   }

@@ -26,7 +26,7 @@ npm start
 ### 3. API 키 설정
 앱 실행 후 좌측 하단 ⚙️ 버튼 → API 키 입력 → 저장
 
-### 4. 설치 파일 배포 (Windows EXE / macOS DMG)
+### 4. 설치 파일 배포 (Windows EXE / macOS ZIP/DMG)
 
 ```bash
 # 설치 파일 빌드 도구 설치
@@ -35,18 +35,22 @@ pnpm install
 # Windows 설치 파일(.exe) 생성
 pnpm dist:win
 
-# macOS 설치 파일(.dmg) 생성
+# macOS 기본 설치 파일(.zip) 생성 (권장)
 pnpm dist:mac
+
+# macOS DMG 생성 (환경에 따라 실패 가능)
+pnpm dist:mac:dmg
 ```
 
 - 결과물은 `dist/` 폴더에 생성됩니다.
 - Windows: `*.exe` (NSIS 설치 파일)
-- macOS: `*.dmg`
+- macOS 기본: `*.zip`
+- macOS 선택: `*.dmg`
 
 GitHub에서 다운로드 가능하게 배포하려면:
 1. `v1.0.1` 같은 태그를 푸시합니다.
 2. GitHub Actions(`.github/workflows/release.yml`)가 Windows/macOS 빌드를 수행합니다.
-3. 생성된 `.exe`/`.dmg`가 GitHub Releases에 자동 업로드됩니다.
+3. 생성된 `.exe`/`.zip`는 항상 GitHub Releases에 업로드되고, `.dmg`는 생성 성공 시 함께 업로드됩니다.
 
 참고:
 - 로컬에서 macOS DMG 빌드는 개발 환경 상태(권한/디스크 유틸리티 설정)에 따라 실패할 수 있습니다.

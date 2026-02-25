@@ -20,9 +20,9 @@ jobs:
             build_cmd: pnpm dist:win
             name: windows
           - os: macos-latest
-            artifact_glob: dist/*.dmg
+            artifact_glob: dist/*.zip
             build_cmd: pnpm dist:mac
-            name: macos
+            name: macos-zip
 
     runs-on: ${{ matrix.os }}
 
@@ -55,9 +55,43 @@ jobs:
           name: ${{ matrix.name }}-artifacts
           path: ${{ matrix.artifact_glob }}
 
+  build-macos-dmg:
+    runs-on: macos-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build DMG (best effort)
+        run: pnpm dist:mac:dmg
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload DMG if generated
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-artifacts
+          path: dist/*.dmg
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, build-macos-dmg]
     runs-on: ubuntu-latest
 
     steps:
@@ -71,5 +105,6 @@ jobs:
         with:
           files: |
             artifacts/**/*.exe
+            artifacts/**/*.zip
             artifacts/**/*.dmg
           generate_release_notes: true
